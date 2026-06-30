@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SimpleTransfer — dApp v1 | DIT Blockchain &amp; Finance</title>
+
+  <!--
+    ============================================================
+    SimpleTransfer — dApp version 1 (lecture seule + historique)
+    Cours Blockchain & Finance - Master 2 - DIT Dakar
+    Seance 6 - Chapitre 4 : Developpement de dApps
+    ============================================================
+    OBJECTIF PEDAGOGIQUE :
+    Connecter MetaMask a une page HTML via ethers.js
+    Lire les donnees ET l'historique d'un contrat deploye
+    100% LECTURE SEULE - aucune transaction, aucun gas
+    ============================================================
+    CE QUI N'EXISTE PAS DANS CETTE VERSION (reserve a la v2) :
+    -> Formulaire d'envoi (sendTransfer)
+    -> Signature de transaction
+    -> Modification de l'etat du contrat
+    ============================================================
+  -->
+
+  <script src="https://cdn.ethers.io/lib/ethers-5.7.2.umd.min.js"
+          type="application/javascript"></script>
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: Arial, Helvetica, sans-serif;
+      background: #f5f7fa;
+      color: #1a1f2e;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    header {
+      background: #1B3A6B;
+      color: white;
+      padding: 20px 28px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+    header h1 { font-size: 20px; font-weight: 700; }
+    header p  { font-size: 13px; opacity: 0.85; margin-top: 4px; }
+
+    .card {
+      background: white;
+      border: 1px solid #dde2ec;
+      border-radius: 8px;
+      padding: 20px 24px;
+      margin-bottom: 16px;
+    }
+    .card h2 {
+      font-size: 15px;
+      font-weight: 700;
+      color: #1B3A6B;
+      margin-bottom: 14px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid #e4edf8;
+    }
+
+    button {
+      background: #2E75B6;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    button:hover    { background: #1B3A6B; }
+    button:disabled { background: #6b9fc4; cursor: not-allowed; }
+    button.btn-sm   { padding: 7px 14px; font-size: 13px; }
+
+    .data-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 0;
+      border-bottom: 1px solid #f0f2f7;
+      font-size: 14px;
+    }
+    .data-row:last-child { border-bottom: none; }
+    .data-label  { color: #555e75; min-width: 200px; font-weight: 600; }
+    .data-value  { color: #1a1f2e; font-family: 'Courier New', monospace; font-size: 13px; }
+
+    .badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .badge-success { background: #e8f5e9; color: #2e7d32; }
+    .badge-warning { background: #fff8e1; color: #e65100; }
+    .badge-info    { background: #e6f1fb; color: #1B3A6B; }
+
+    .alert {
+      padding: 10px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      margin-bottom: 14px;
+    }
+    .alert-warning { background: #fff3e0; border-left: 3px solid #fb8c00; color: #6d4c41; }
+    .alert-error   { background: #ffebee; border-left: 3px solid #e53935; color: #6d1b1b; }
+
+    .stat-grid { display: flex; gap: 14px; margin-bottom: 16px; }
+    .stat-box {
+      flex: 1;
+      background: #e6f1fb;
+      border-radius: 8px;
+      padding: 14px 16px;
+      text-align: center;
+    }
+    .stat-box.green { background: #e8f5e9; }
+    .stat-box .stat-val { font-size: 24px; font-weight: 700; color: #1B3A6B; }
+    .stat-box.green .stat-val { color: #2e7d32; }
+    .stat-box .stat-lbl { font-size: 11px; color: #555e75; margin-top: 2px; }
+
+    .history-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .history-table th {
+      background: #1B3A6B; color: white;
+      padding: 10px 12px; text-align: left; font-weight: 600;
+    }
+    .history-table td { padding: 9px 12px; border-bottom: 1px solid #e8ecf4; }
+    .history-table tr:nth-child(even) td { background: #f5f7fa; }
+    .history-table .mono { font-family: 'Courier New', monospace; font-size: 11px; }
+    .history-table .addr {
+      font-family: 'Courier New', monospace; font-size: 11px;
+      max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+
+    .hidden { display: none; }
+    .loading { color: #888; font-style: italic; font-size: 13px; }
+
+    .readonly-banner {
+      background: #fff8d2;
+      border: 1px solid #aa8700;
+      border-radius: 6px;
+      padding: 10px 16px;
+      text-align: center;
+      font-size: 12px;
+      font-weight: 700;
+      color: #786000;
+      margin-top: 16px;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>SimpleTransfer — dApp v1</h1>
+    <p>Cours Blockchain &amp; Finance · Master 2 · DIT Dakar · Séance 6</p>
+  </header>
+
+  <div class="card">
+    <h2>① Connexion au portefeuille</h2>
+
+    <div id="alertMetaMask" class="alert alert-error hidden">
+      MetaMask n'est pas installé. Installez l'extension sur <strong>metamask.io</strong>
+      puis rechargez cette page.
+    </div>
+    <div id="alertNetwork" class="alert alert-warning hidden">
+      Vous n'êtes pas sur le réseau Sepolia. Changez de réseau dans MetaMask
+      puis cliquez à nouveau sur Connecter.
+    </div>
+
+    <button id="btnConnect">🦊 Connecter MetaMask</button>
+
+    <div id="walletInfo" class="hidden" style="margin-top: 14px;">
+      <div class="data-row">
+        <span class="data-label">Adresse connectée</span>
+        <span class="data-value" id="walletAddress">—</span>
+      </div>
+      <div class="data-row">
+        <span class="data-label">Réseau actif</span>
+        <span id="networkBadge" class="badge badge-info">—</span>
+      </div>
+      <div class="data-row">
+        <span class="data-label">Solde wallet</span>
+        <span class="data-value" id="walletBalance">—</span>
+      </div>
+      <div class="data-row">
+        <span class="data-label">Statut connexion</span>
+        <span class="badge badge-success">✓ Connecté</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card hidden" id="sectionContract">
+    <h2>② Données du contrat SimpleTransfer (lecture seule — gratuit)</h2>
+    <p style="font-size:13px; color:#666; margin-bottom:14px;">
+      Ces données sont lues directement depuis la blockchain Sepolia via des fonctions <strong>view</strong>.
+      Aucune transaction, aucun gas consommé.
+    </p>
+
+    <div class="stat-grid">
+      <div class="stat-box">
+        <div class="stat-val" id="totalTransfers">—</div>
+        <div class="stat-lbl">TRANSFERTS EFFECTUÉS</div>
+      </div>
+      <div class="stat-box green">
+        <div class="stat-val" id="totalAmount">—</div>
+        <div class="stat-lbl">VOLUME TOTAL (ETH)</div>
+      </div>
+    </div>
+
+    <div class="data-row">
+      <span class="data-label">Adresse du contrat</span>
+      <span class="data-value" id="contractAddress">—</span>
+    </div>
+    <div class="data-row">
+      <span class="data-label">Propriétaire (owner)</span>
+      <span class="data-value" id="contractOwner">
+        <span class="loading">Chargement...</span>
+      </span>
+    </div>
+
+    <div style="margin-top: 14px;">
+      <button id="btnRefresh">🔄 Rafraîchir les données</button>
+    </div>
+  </div>
+
+  <div class="card hidden" id="sectionHistory">
+    <h2>③ Historique des transferts (events TransferSent)</h2>
+    <p style="font-size:13px; color:#666; margin-bottom:14px;">
+      Cette section lit les <strong>logs d'events</strong> émis par le contrat depuis son déploiement.
+      Comme pour les données ci-dessus, c'est une lecture pure : <code>queryFilter()</code>
+      n'envoie jamais de transaction et ne coûte aucun gas.
+    </p>
+
+    <button class="btn-sm" id="btnLoadHistory">📋 Charger l'historique</button>
+
+    <div id="historyContent" style="margin-top:14px;">
+      <p class="loading">Cliquez sur "Charger l'historique" pour afficher les transferts.</p>
+    </div>
+  </div>
+
+  <div class="card hidden" id="sectionLinks">
+    <h2>④ Vérification sur Sepolia Explorer</h2>
+    <p style="font-size:13px; color:#666; margin-bottom:12px;">
+      Toutes les transactions de ce contrat sont publiques et vérifiables sur l'explorateur de blocs.
+    </p>
+    <a id="explorerLink" href="#" target="_blank"
+       style="color:#2E75B6; font-size:14px; text-decoration:none; font-weight:600;">
+      🔗 Voir ce contrat sur Sepolia Etherscan →
+    </a>
+
+    <div class="readonly-banner">
+      dApp v1 = LECTURE SEULE · Aucune transaction · Aucun gas · Aucune écriture sur la blockchain
+    </div>
+  </div>
+
+  <footer style="text-align:center; font-size:11px; color:#aaa; margin-top:20px;">
+    Blockchain &amp; Finance · Master 2 · DIT Dakar · dApp v1 (Séance 6) ·
+    Propulsé par ethers.js 5.7 &amp; Ethereum Sepolia Testnet
+  </footer>
+
+
+  <script>
+
+    const CONTRACT_ADDRESS = "0x29Bee132DD856469A9F53870E85D22Abf9975C63";
+
+    const CONTRACT_ABI = [
+      "function owner() view returns (address)",
+      "function totalTransfers() view returns (uint256)",
+      "function totalAmountReceived() view returns (uint256)",
+      "function getTransferCount() view returns (uint256)",
+      "event TransferSent(address indexed from, address indexed to, uint256 amount, string note)"
+    ];
+
+    const SEPOLIA_CHAIN_ID = 11155111;
+
+    let provider, signer, contract;
+
+    document.getElementById("btnConnect").addEventListener("click", async () => {
+      if (!window.ethereum) {
+        document.getElementById("alertMetaMask").classList.remove("hidden");
+        return;
+      }
+
+      try {
+        provider = new ethers.providers.Web3Provider(window.ethereum);
+        await provider.send("eth_requestAccounts", []);
+        signer = provider.getSigner();
+        const address = await signer.getAddress();
+
+        const network = await provider.getNetwork();
+        if (network.chainId !== SEPOLIA_CHAIN_ID) {
+          document.getElementById("alertNetwork").classList.remove("hidden");
+          return;
+        }
+
+        const balanceWei = await provider.getBalance(address);
+        const balanceEth = parseFloat(ethers.utils.formatEther(balanceWei)).toFixed(4);
+
+        document.getElementById("walletAddress").textContent = address;
+        document.getElementById("networkBadge").textContent =
+          `Sepolia Testnet (ID: ${network.chainId})`;
+        document.getElementById("walletBalance").textContent =
+          `${balanceEth} SepoliaETH`;
+
+        document.getElementById("walletInfo").classList.remove("hidden");
+        document.getElementById("btnConnect").textContent = "✓ Connecté";
+        document.getElementById("btnConnect").disabled = true;
+
+        contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
+
+        document.getElementById("contractAddress").textContent = CONTRACT_ADDRESS;
+        document.getElementById("explorerLink").href =
+          `https://sepolia.etherscan.io/address/${CONTRACT_ADDRESS}`;
+
+        await loadContractData();
+
+        document.getElementById("sectionContract").classList.remove("hidden");
+        document.getElementById("sectionHistory").classList.remove("hidden");
+        document.getElementById("sectionLinks").classList.remove("hidden");
+
+      } catch (err) {
+        console.error("Erreur de connexion:", err);
+        if (err.code === 4001) {
+          alert("Connexion refusée. Veuillez autoriser la connexion dans MetaMask.");
+        } else {
+          alert("Erreur: " + err.message);
+        }
+      }
+    });
+
+    async function loadContractData() {
+      try {
+        const owner           = await contract.owner();
+        const totalTransfers  = await contract.totalTransfers();
+        const totalAmountWei  = await contract.totalAmountReceived();
+
+        document.getElementById("contractOwner").textContent = owner;
+        document.getElementById("totalTransfers").textContent =
+          totalTransfers.toString();
+
+        const totalAmountEth = ethers.utils.formatEther(totalAmountWei);
+        document.getElementById("totalAmount").textContent =
+          parseFloat(totalAmountEth).toFixed(4);
+
+      } catch (err) {
+        console.error("Erreur lecture contrat:", err);
+        document.getElementById("contractOwner").textContent = "Erreur de lecture";
+      }
+    }
+
+    document.getElementById("btnRefresh").addEventListener("click", async () => {
+      document.getElementById("totalTransfers").innerHTML =
+        '<span class="loading">...</span>';
+      await loadContractData();
+    });
+
+    document.getElementById("btnLoadHistory").addEventListener("click", async () => {
+      const histDiv = document.getElementById("historyContent");
+      histDiv.innerHTML = '<p class="loading">Chargement des events depuis la blockchain...</p>';
+
+      try {
+        const filter = contract.filters.TransferSent();
+        const events = await contract.queryFilter(filter, 0, "latest");
+
+        if (events.length === 0) {
+          histDiv.innerHTML = '<p style="color:#888;font-size:13px;">Aucun transfert enregistré pour l\'instant.</p>';
+          return;
+        }
+
+        let html = `
+          <table class="history-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Expéditeur</th>
+                <th>Destinataire</th>
+                <th>Montant</th>
+                <th>Note</th>
+                <th>Bloc</th>
+                <th>Tx</th>
+              </tr>
+            </thead>
+            <tbody>`;
+
+        events.slice().reverse().forEach((event, idx) => {
+          const { from, to, amount, note } = event.args;
+          const ethAmount = parseFloat(ethers.utils.formatEther(amount)).toFixed(4);
+          const shortTx   = event.transactionHash.slice(0, 10) + "...";
+
+          html += `
+            <tr>
+              <td><strong>#${events.length - idx}</strong></td>
+              <td class="addr" title="${from}">${from}</td>
+              <td class="addr" title="${to}">${to}</td>
+              <td><strong>${ethAmount} ETH</strong></td>
+              <td>${note || '<em style="color:#aaa">—</em>'}</td>
+              <td class="mono">${event.blockNumber}</td>
+              <td>
+                <a href="https://sepolia.etherscan.io/tx/${event.transactionHash}"
+                   target="_blank" style="color:#2E75B6; font-size:11px;">
+                  ${shortTx}
+                </a>
+              </td>
+            </tr>`;
+        });
+
+        html += '</tbody></table>';
+        html += `<p style="font-size:12px;color:#888;margin-top:8px;">
+          ${events.length} transfert(s) trouvé(s) — lecture pure depuis les logs on-chain</p>`;
+        histDiv.innerHTML = html;
+
+      } catch (err) {
+        console.error("Erreur chargement historique:", err);
+        histDiv.innerHTML =
+          '<p class="loading">Erreur de chargement. Vérifiez votre connexion MetaMask.</p>';
+      }
+    });
+
+  </script>
+
+</body>
+</html>
