@@ -11,15 +11,10 @@
     Cours Blockchain & Finance - Master 2 - DIT Dakar
     Seance 6 - Chapitre 4 : Developpement de dApps
     ============================================================
-    OBJECTIF PEDAGOGIQUE :
-    Connecter MetaMask a une page HTML via ethers.js
-    Lire les donnees ET l'historique d'un contrat deploye
-    100% LECTURE SEULE - aucune transaction, aucun gas
-    ============================================================
-    CE QUI N'EXISTE PAS DANS CETTE VERSION (reserve a la v2) :
-    -> Formulaire d'envoi (sendTransfer)
-    -> Signature de transaction
-    -> Modification de l'etat du contrat
+    NOUVEAUTE : chaque etudiant colle l'adresse de SON PROPRE
+    contrat deploye hier en Remix. La connexion MetaMask est deja
+    individuelle par defaut (chacun connecte son propre wallet) -
+    ce qui manquait c'etait de pouvoir changer le contrat lu.
     ============================================================
   -->
 
@@ -34,7 +29,6 @@
       min-height: 100vh;
       padding: 20px;
     }
-
     header {
       background: #1B3A6B;
       color: white;
@@ -76,6 +70,25 @@
     button:disabled { background: #6b9fc4; cursor: not-allowed; }
     button.btn-sm   { padding: 7px 14px; font-size: 13px; }
 
+    .form-group { margin-bottom: 12px; }
+    .form-group label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: #444;
+      margin-bottom: 5px;
+    }
+    .form-group input {
+      width: 100%;
+      padding: 9px 12px;
+      border: 1px solid #c8d1df;
+      border-radius: 6px;
+      font-size: 13px;
+      font-family: 'Courier New', monospace;
+    }
+    .form-group input:focus { outline: 2px solid #2E75B6; border-color: #2E75B6; }
+    .form-group small { color: #888; font-size: 11px; display: block; margin-top: 3px; }
+
     .data-row {
       display: flex;
       align-items: center;
@@ -107,6 +120,7 @@
     }
     .alert-warning { background: #fff3e0; border-left: 3px solid #fb8c00; color: #6d4c41; }
     .alert-error   { background: #ffebee; border-left: 3px solid #e53935; color: #6d1b1b; }
+    .alert-info    { background: #e6f1fb; border-left: 3px solid #2E75B6; color: #1B3A6B; }
 
     .stat-grid { display: flex; gap: 14px; margin-bottom: 16px; }
     .stat-box {
@@ -157,8 +171,14 @@
     <p>Cours Blockchain &amp; Finance · Master 2 · DIT Dakar · Séance 6</p>
   </header>
 
+  <!-- ── SECTION 1 : CONNEXION METAMASK ──────────────────────────── -->
   <div class="card">
     <h2>① Connexion au portefeuille</h2>
+
+    <div class="alert alert-info">
+      ℹ️ Chacun connecte ICI son propre MetaMask. Cette connexion est individuelle —
+      ce n'est jamais le wallet de l'enseignant qui s'ouvre.
+    </div>
 
     <div id="alertMetaMask" class="alert alert-error hidden">
       MetaMask n'est pas installé. Installez l'extension sur <strong>metamask.io</strong>
@@ -169,7 +189,7 @@
       puis cliquez à nouveau sur Connecter.
     </div>
 
-    <button id="btnConnect">🦊 Connecter MetaMask</button>
+    <button id="btnConnect">🦊 Connecter MON MetaMask</button>
 
     <div id="walletInfo" class="hidden" style="margin-top: 14px;">
       <div class="data-row">
@@ -191,8 +211,29 @@
     </div>
   </div>
 
+  <!-- ── SECTION 2 : CHOISIR SON PROPRE CONTRAT ──────────────────── -->
+  <div class="card hidden" id="sectionPickContract">
+    <h2>② Charger VOTRE contrat (et pas un autre)</h2>
+    <p style="font-size:13px; color:#666; margin-bottom:14px;">
+      Collez ci-dessous l'adresse du contrat <strong>que VOUS avez déployé hier</strong>
+      en Remix (Deploy &amp; Run Transactions → Deployed Contracts → icône copier).
+      L'adresse pré-remplie est juste un exemple — remplacez-la par la vôtre.
+    </p>
+
+    <div class="form-group">
+      <label>Adresse de votre contrat SimpleTransfer</label>
+      <input type="text" id="inputContractAddress"
+             value="0xdd60611951b607bd4c68e306992022d5e8f75bcf"
+             spellcheck="false" autocomplete="off"/>
+      <small>Adresse Ethereum valide (42 caractères, commence par 0x)</small>
+    </div>
+
+    <button id="btnLoadContract">📥 Charger MON contrat</button>
+  </div>
+
+  <!-- ── SECTION 3 : DONNÉES DU CONTRAT ──────────────────────────── -->
   <div class="card hidden" id="sectionContract">
-    <h2>② Données du contrat SimpleTransfer (lecture seule — gratuit)</h2>
+    <h2>③ Données de votre contrat SimpleTransfer (lecture seule — gratuit)</h2>
     <p style="font-size:13px; color:#666; margin-bottom:14px;">
       Ces données sont lues directement depuis la blockchain Sepolia via des fonctions <strong>view</strong>.
       Aucune transaction, aucun gas consommé.
@@ -225,12 +266,12 @@
     </div>
   </div>
 
+  <!-- ── SECTION 4 : HISTORIQUE (LECTURE SEULE via queryFilter) ───── -->
   <div class="card hidden" id="sectionHistory">
-    <h2>③ Historique des transferts (events TransferSent)</h2>
+    <h2>④ Historique de vos transferts (events TransferSent)</h2>
     <p style="font-size:13px; color:#666; margin-bottom:14px;">
-      Cette section lit les <strong>logs d'events</strong> émis par le contrat depuis son déploiement.
-      Comme pour les données ci-dessus, c'est une lecture pure : <code>queryFilter()</code>
-      n'envoie jamais de transaction et ne coûte aucun gas.
+      Cette section lit les <strong>logs d'events</strong> de VOTRE contrat depuis son déploiement.
+      Lecture pure : <code>queryFilter()</code> n'envoie jamais de transaction.
     </p>
 
     <button class="btn-sm" id="btnLoadHistory">📋 Charger l'historique</button>
@@ -240,8 +281,9 @@
     </div>
   </div>
 
+  <!-- ── SECTION 5 : LIENS UTILES ─────────────────────────────────── -->
   <div class="card hidden" id="sectionLinks">
-    <h2>④ Vérification sur Sepolia Explorer</h2>
+    <h2>⑤ Vérification sur Sepolia Explorer</h2>
     <p style="font-size:13px; color:#666; margin-bottom:12px;">
       Toutes les transactions de ce contrat sont publiques et vérifiables sur l'explorateur de blocs.
     </p>
@@ -263,7 +305,8 @@
 
   <script>
 
-    const CONTRACT_ADDRESS = "0x29Bee132DD856469A9F53870E85D22Abf9975C63";
+    // Adresse par defaut (exemple) - chaque etudiant la remplace par la sienne
+    let CONTRACT_ADDRESS = "0xdd60611951b607bd4c68e306992022d5e8f75bcf";
 
     const CONTRACT_ABI = [
       "function owner() view returns (address)",
@@ -277,6 +320,7 @@
 
     let provider, signer, contract;
 
+    // ── ETAPE 1 : Connexion MetaMask (individuelle a chaque utilisateur) ──
     document.getElementById("btnConnect").addEventListener("click", async () => {
       if (!window.ethereum) {
         document.getElementById("alertMetaMask").classList.remove("hidden");
@@ -308,17 +352,9 @@
         document.getElementById("btnConnect").textContent = "✓ Connecté";
         document.getElementById("btnConnect").disabled = true;
 
-        contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
-
-        document.getElementById("contractAddress").textContent = CONTRACT_ADDRESS;
-        document.getElementById("explorerLink").href =
-          `https://sepolia.etherscan.io/address/${CONTRACT_ADDRESS}`;
-
-        await loadContractData();
-
-        document.getElementById("sectionContract").classList.remove("hidden");
-        document.getElementById("sectionHistory").classList.remove("hidden");
-        document.getElementById("sectionLinks").classList.remove("hidden");
+        // Pre-remplir le champ avec l'adresse de l'utilisateur connecte
+        // comme rappel visuel (mais c'est l'adresse du CONTRAT qu'il faut, pas du wallet)
+        document.getElementById("sectionPickContract").classList.remove("hidden");
 
       } catch (err) {
         console.error("Erreur de connexion:", err);
@@ -328,6 +364,35 @@
           alert("Erreur: " + err.message);
         }
       }
+    });
+
+    // ── ETAPE 2 : Charger SON PROPRE contrat ──────────────────────────
+    document.getElementById("btnLoadContract").addEventListener("click", async () => {
+      const inputAddr = document.getElementById("inputContractAddress").value.trim();
+
+      if (!ethers.utils.isAddress(inputAddr)) {
+        alert("Adresse de contrat invalide. Vérifiez le format (0x... 42 caractères).");
+        return;
+      }
+
+      CONTRACT_ADDRESS = inputAddr;
+
+      // IMPORTANT : on passe 'provider' (pas 'signer') - lecture seule uniquement
+      contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
+
+      document.getElementById("contractAddress").textContent = CONTRACT_ADDRESS;
+      document.getElementById("explorerLink").href =
+        `https://sepolia.etherscan.io/address/${CONTRACT_ADDRESS}`;
+
+      await loadContractData();
+
+      document.getElementById("sectionContract").classList.remove("hidden");
+      document.getElementById("sectionHistory").classList.remove("hidden");
+      document.getElementById("sectionLinks").classList.remove("hidden");
+
+      // Vider l'historique precedent si on change de contrat
+      document.getElementById("historyContent").innerHTML =
+        '<p class="loading">Cliquez sur "Charger l\'historique" pour afficher les transferts.</p>';
     });
 
     async function loadContractData() {
@@ -346,7 +411,7 @@
 
       } catch (err) {
         console.error("Erreur lecture contrat:", err);
-        document.getElementById("contractOwner").textContent = "Erreur de lecture";
+        document.getElementById("contractOwner").textContent = "Erreur de lecture — vérifiez l'adresse";
       }
     }
 
