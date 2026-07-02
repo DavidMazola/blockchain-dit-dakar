@@ -81,6 +81,18 @@
     button.btn-send { background: #1B6B3A; }
     button.btn-send:hover { background: #0d4325; }
 
+    /* AMÉLIORATION 6 : petits boutons de copie à côté des adresses */
+    .copy-btn {
+      width: auto;
+      padding: 3px 8px;
+      font-size: 11px;
+      background: #eef2f7;
+      color: #1B3A6B;
+      border-radius: 4px;
+      margin-left: 4px;
+    }
+    .copy-btn:hover { background: #dde6f0; }
+
     .form-group { margin-bottom: 12px; }
     .form-group label {
       display: block;
@@ -156,6 +168,17 @@
     <p>Cours Blockchain &amp; Finance · Master 2 · DIT Dakar · Séance 7</p>
   </header>
 
+  <!-- ══════════════════════════════════════════════════════════════
+       AMÉLIORATION 5 : bannière pédagogique permanente
+       Toujours visible, pas seulement mentionnée à l'oral — une vraie
+       dApp de production affiche toujours ce type d'avertissement.
+       ══════════════════════════════════════════════════════════════ -->
+  <div class="alert alert-warning">
+    ⚠️ <strong>Contrat pédagogique non audité</strong> — déployé uniquement sur le testnet
+    Sepolia. Aucune valeur réelle n'est en jeu. Ne jamais réutiliser ce contrat simplifié
+    tel quel sur le réseau principal (mainnet) sans audit de sécurité complet.
+  </div>
+
   <!-- ── SECTION CONNEXION ────────────────────────────────────────── -->
   <div class="card" id="sectionConnect">
     <h2>① Connexion au portefeuille MetaMask</h2>
@@ -164,6 +187,7 @@
       <div class="data-row">
         <span class="data-label">Adresse connectée</span>
         <span class="data-value" id="walletAddress">—</span>
+        <button type="button" class="copy-btn" onclick="copyAddr('walletAddress', this)" title="Copier l'adresse">📋</button>
       </div>
       <div class="data-row">
         <span class="data-label">Solde</span>
@@ -214,13 +238,38 @@
         </div>
         <div style="margin-top:12px;">
           <div class="data-row">
-            <span class="data-label">Propriétaire</span>
+            <span class="data-label">Propriétaire (owner)</span>
             <span class="data-value addr" id="statOwner">—</span>
+            <button type="button" class="copy-btn" onclick="copyAddr('statOwner', this)" title="Copier l'adresse">📋</button>
+          </div>
+          <!-- AMÉLIORATION 1 : badge owner / non-owner, visible AVANT de cliquer withdraw -->
+          <div class="data-row">
+            <span class="data-label">Vous êtes owner ?</span>
+            <span id="ownerBadge" class="badge badge-info">—</span>
           </div>
           <div class="data-row">
             <span class="data-label">Adresse contrat</span>
             <span class="data-value addr" id="statContract">—</span>
+            <button type="button" class="copy-btn" onclick="copyAddr('statContract', this)" title="Copier l'adresse">📋</button>
           </div>
+        </div>
+
+        <!-- AMÉLIORATION 4 : suivi précis des fonds, pour fermer la
+             zone d'ombre "où sont réellement mes ETH envoyés ?" -->
+        <div style="margin-top:12px; padding-top:12px; border-top:1px dashed #dde2ec;">
+          <div class="data-row">
+            <span class="data-label">Solde actuel du contrat</span>
+            <span class="data-value" id="statContractBalance">—</span>
+          </div>
+          <div class="data-row">
+            <span class="data-label">Vos envois cumulés (sendTransfer)</span>
+            <span class="data-value" id="statMySent">—</span>
+          </div>
+          <p style="font-size:11px; color:#888; margin-top:6px;">
+            « Vos envois cumulés » = tout ce que VOUS avez personnellement envoyé au fil du
+            temps, même si le owner a depuis retiré des fonds. « Solde actuel du contrat »
+            = ce qui s'y trouve réellement en ce moment.
+          </p>
         </div>
         <div style="margin-top:12px;">
           <button class="btn-sm" id="btnRefresh">🔄 Rafraîchir</button>
@@ -258,18 +307,66 @@
 
         <button class="btn-send" id="btnSend">💸 Envoyer via sendTransfer</button>
 
+        <div class="alert alert-warning" style="margin-top:12px; margin-bottom:0;">
+          ⚠️ Ces fonds ne sont <strong>pas</strong> transférés au destinataire. Ils restent dans
+          ce contrat — seul le propriétaire (owner) peut les récupérer via <code>withdraw()</code>
+          (section ⑤ ci-dessous).
+        </div>
+
         <!-- Affichage du résultat de la transaction -->
         <div id="txStatus" class="hidden tx-status"></div>
       </div>
     </div>
 
+    <!-- Retirer les fonds (owner uniquement) -->
+    <div class="card">
+      <h2>⑤ Retirer les fonds du contrat (owner uniquement)</h2>
+      <div class="alert alert-info">
+        Cette fonction est protégée par un <code>modifier onlyOwner</code> dans le contrat Solidity.
+        <strong>Seule l'adresse qui a déployé ce contrat</strong> peut retirer les fonds accumulés.
+        Si vous n'êtes pas le owner, la transaction sera automatiquement refusée — c'est le modifier
+        en action, pas un bug.
+      </div>
+      <button class="btn-sm" id="btnWithdraw">🏦 Retirer via withdraw()</button>
+      <div id="withdrawStatus" class="hidden tx-status"></div>
+    </div>
+
+    <!-- Transfert direct wallet à wallet (vrai P2P, sans passer par le contrat) -->
+    <div class="card">
+      <h2>⑥ Transfert direct wallet à wallet (vrai P2P)</h2>
+      <div class="alert alert-info">
+        Contrairement au formulaire ③ ci-dessus (qui passe par le contrat et y bloque les fonds),
+        ceci est une <strong>vraie transaction Ethereum classique</strong> : les ETH quittent
+        réellement votre wallet et arrivent instantanément dans celui du destinataire. Aucun
+        contrat n'est impliqué — donc cette transaction <strong>n'apparaîtra pas</strong> dans
+        l'historique des events plus bas.
+      </div>
+
+      <div class="form-group">
+        <label>Adresse du destinataire</label>
+        <input type="text" id="inputP2PTo" placeholder="0x..."
+               spellcheck="false" autocomplete="off"/>
+        <small>L'adresse MetaMask d'un camarade, par exemple</small>
+      </div>
+
+      <div class="form-group">
+        <label>Montant à envoyer (en ETH)</label>
+        <input type="number" id="inputP2PAmount" placeholder="0.001"
+               step="0.001" min="0.0001"/>
+      </div>
+
+      <button class="btn-send" id="btnP2PSend">🔁 Envoyer un vrai transfert P2P</button>
+      <div id="p2pStatus" class="hidden tx-status"></div>
+    </div>
+
     <!-- Historique des transferts -->
     <div class="card">
-      <h2>⑤ Historique des transferts (events TransferSent)</h2>
+      <h2>⑦ Historique des transferts (events TransferSent)</h2>
       <p style="font-size:13px; color:#666; margin-bottom:14px;">
         Ces données proviennent des <strong>logs d'events</strong> émis par le contrat.
         La dApp interroge la blockchain pour lire tous les events <code>TransferSent</code>
-        depuis le déploiement du contrat.
+        depuis le déploiement du contrat. Note : les transferts P2P directs (section ⑥)
+        n'y apparaissent pas, car ils ne passent pas par le contrat.
       </p>
 
       <div style="margin-bottom:12px;">
@@ -283,7 +380,7 @@
 
     <!-- Liens Sepolia Explorer -->
     <div class="card">
-      <h2>⑥ Vérification on-chain</h2>
+      <h2>⑧ Vérification on-chain</h2>
       <p style="font-size:13px; color:#666; margin-bottom:10px;">
         Chaque action ci-dessus est enregistrée définitivement sur la blockchain Sepolia.
       </p>
@@ -337,6 +434,60 @@
 
     let provider, signer, contract;
     let currentUserAddress = "";
+
+
+    // ────────────────────────────────────────────────────────────────
+    // AMÉLIORATION 6 : copier une adresse en un clic
+    // Prend l'ID d'un élément affichant une adresse, copie son texte,
+    // et donne un retour visuel bref (✓) sur le bouton cliqué.
+    // ────────────────────────────────────────────────────────────────
+    function copyAddr(elementId, btn) {
+      const text = document.getElementById(elementId).textContent;
+      if (!text || text === "—") return;
+      navigator.clipboard.writeText(text).then(() => {
+        const original = btn.textContent;
+        btn.textContent = "✓";
+        setTimeout(() => { btn.textContent = original; }, 1200);
+      });
+    }
+
+
+    // ────────────────────────────────────────────────────────────────
+    // AMÉLIORATION 2 : réagir aux changements de compte ou de réseau
+    // Sans ceci, un étudiant qui change de compte MetaMask APRÈS
+    // connexion garde une interface figée sur l'ancien compte, sans
+    // aucun message — source fréquente et déroutante d'erreurs en TP.
+    // ────────────────────────────────────────────────────────────────
+    if (window.ethereum) {
+      window.ethereum.on("accountsChanged", handleAccountsChanged);
+      window.ethereum.on("chainChanged", () => {
+        // Trop d'état dépend du réseau (chainId, provider, contrat)
+        // pour le corriger proprement à la main : on recharge la page.
+        alert("Réseau changé dans MetaMask. La page va se recharger.");
+        window.location.reload();
+      });
+    }
+
+    async function handleAccountsChanged(accounts) {
+      if (accounts.length === 0) {
+        // MetaMask déconnecté ou verrouillé par l'utilisateur
+        alert("MetaMask déconnecté. Rechargez la page pour vous reconnecter.");
+        window.location.reload();
+        return;
+      }
+
+      // Un autre compte a été sélectionné dans MetaMask : le signer
+      // doit être recréé (il est toujours lié au compte ACTIF), puis
+      // toute l'interface doit refléter ce nouveau compte.
+      signer = provider.getSigner();
+      currentUserAddress = accounts[0];
+      document.getElementById("walletAddress").textContent = currentUserAddress;
+
+      if (contract) {
+        contract = contract.connect(signer);
+        await refreshStats();
+      }
+    }
 
 
     // ────────────────────────────────────────────────────────────────
@@ -424,6 +575,8 @@
       document.getElementById("historyContent").innerHTML =
         '<p class="loading">Cliquez sur "Charger l\'historique" pour afficher les transferts.</p>';
       document.getElementById("txStatus").classList.add("hidden");
+      document.getElementById("withdrawStatus").classList.add("hidden");
+      document.getElementById("p2pStatus").classList.add("hidden");
     });
 
 
@@ -442,6 +595,36 @@
         document.getElementById("statAmount").textContent =
           parseFloat(ethers.utils.formatEther(totalAmountWei)).toFixed(6) + " ETH";
 
+        // AMÉLIORATION 1 : badge owner / non-owner
+        // Les adresses Ethereum ne sont pas sensibles à la casse, donc
+        // on compare en minuscules pour éviter un faux négatif.
+        const badge = document.getElementById("ownerBadge");
+        if (currentUserAddress.toLowerCase() === owner.toLowerCase()) {
+          badge.textContent = "✓ Vous êtes le owner";
+          badge.className   = "badge badge-success";
+        } else {
+          badge.textContent = "✗ Vous n'êtes pas le owner";
+          badge.className   = "badge badge-warning";
+        }
+
+        // AMÉLIORATION 4a : solde RÉEL actuellement détenu par le
+        // contrat — peut différer de "Volume total transféré" si le
+        // owner a déjà effectué un withdraw() entre-temps.
+        const contractBalWei = await provider.getBalance(CONTRACT_ADDRESS);
+        document.getElementById("statContractBalance").textContent =
+          parseFloat(ethers.utils.formatEther(contractBalWei)).toFixed(6) + " ETH";
+
+        // AMÉLIORATION 4b : total personnellement envoyé par l'utilisateur
+        // connecté. On filtre les events TransferSent par expéditeur (from)
+        // grâce au paramètre indexé du contrat — pas besoin de tout
+        // parcourir manuellement.
+        const myFilter = contract.filters.TransferSent(currentUserAddress);
+        const myEvents = await contract.queryFilter(myFilter, 0, "latest");
+        let myTotalWei = ethers.BigNumber.from(0);
+        myEvents.forEach(e => { myTotalWei = myTotalWei.add(e.args.amount); });
+        document.getElementById("statMySent").textContent =
+          parseFloat(ethers.utils.formatEther(myTotalWei)).toFixed(6) + " ETH";
+
         // Rafraîchir aussi le solde du wallet
         const balWei = await provider.getBalance(currentUserAddress);
         const balEth = parseFloat(ethers.utils.formatEther(balWei)).toFixed(4);
@@ -457,6 +640,30 @@
 
 
     // ────────────────────────────────────────────────────────────────
+    // AMÉLIORATION 3 : vérification de solde réutilisable
+    // Utilisée par sendTransfer ET par le transfert P2P direct, pour
+    // éviter d'envoyer une transaction vouée à l'échec.
+    // ────────────────────────────────────────────────────────────────
+    async function hasSufficientBalance(amountWei, statusDivId) {
+      const balanceWei = await provider.getBalance(currentUserAddress);
+
+      // Marge de sécurité réservée pour le gas (0.0005 ETH), pour éviter
+      // qu'un montant "tout juste suffisant" échoue quand même à cause
+      // des frais de transaction.
+      const gasBufferWei = ethers.utils.parseEther("0.0005");
+
+      if (amountWei.add(gasBufferWei).gt(balanceWei)) {
+        const balanceEth = ethers.utils.formatEther(balanceWei);
+        showTxStatus(statusDivId, "error",
+          `Solde insuffisant. Vous avez ${parseFloat(balanceEth).toFixed(4)} SepoliaETH, ` +
+          `ce qui ne couvre pas le montant demandé + les frais de gas estimés.`);
+        return false;
+      }
+      return true;
+    }
+
+
+    // ────────────────────────────────────────────────────────────────
     // ENVOYER UN TRANSFERT — fonction payable
     // C'est ici que la dApp écrit sur la blockchain
     // ────────────────────────────────────────────────────────────────
@@ -468,22 +675,28 @@
 
       // Validation basique des entrées utilisateur
       if (!ethers.utils.isAddress(toAddress)) {
-        showTxStatus("error", "Adresse destinataire invalide. Vérifiez le format (0x...).");
+        showTxStatus("txStatus", "error", "Adresse destinataire invalide. Vérifiez le format (0x...).");
         return;
       }
       if (!amountEth || parseFloat(amountEth) <= 0) {
-        showTxStatus("error", "Montant invalide. Saisissez un montant supérieur à 0.");
+        showTxStatus("txStatus", "error", "Montant invalide. Saisissez un montant supérieur à 0.");
         return;
       }
 
       try {
-        // Afficher un message d'attente
-        showTxStatus("pending", "⏳ Envoi en cours... MetaMask va s'ouvrir pour confirmation.");
-        document.getElementById("btnSend").disabled = true;
-
-        // Convertir le montant ETH en wei (1 ETH = 10^18 wei)
-        // ethers.utils.parseEther fait cette conversion
         const amountWei = ethers.utils.parseEther(amountEth);
+
+        // AMÉLIORATION 3 : vérifier le solde AVANT d'envoyer la transaction.
+        // Sans ceci, MetaMask échoue après coup avec un message technique
+        // ("insufficient funds for gas * price + value") au lieu d'un
+        // message clair affiché directement dans la dApp.
+        if (!(await hasSufficientBalance(amountWei, "txStatus"))) {
+          return;
+        }
+
+        // Afficher un message d'attente
+        showTxStatus("txStatus", "pending", "⏳ Envoi en cours... MetaMask va s'ouvrir pour confirmation.");
+        document.getElementById("btnSend").disabled = true;
 
         // Appel de la fonction sendTransfer du contrat
         // { value: amountWei } = le montant ETH envoyé avec la transaction (msg.value dans Solidity)
@@ -491,7 +704,7 @@
           value: amountWei
         });
 
-        showTxStatus("pending",
+        showTxStatus("txStatus", "pending",
           `✅ Transaction envoyée ! Hash : <a href="https://sepolia.etherscan.io/tx/${tx.hash}"
             target="_blank" style="color:#2E75B6;">${tx.hash.slice(0,18)}...</a>
           <br>Attente de confirmation par le réseau...`);
@@ -500,9 +713,10 @@
         // tx.wait() retourne le reçu de transaction (comme ce qu'on a vu sur Sepolia Explorer)
         const receipt = await tx.wait();
 
-        showTxStatus("success",
+        showTxStatus("txStatus", "success",
           `🎉 Transaction confirmée au bloc <strong>${receipt.blockNumber}</strong> !
           <br>Gas utilisé : ${receipt.gasUsed.toString()} unités
+          <br>Rappel : ces ETH sont maintenant dans le contrat, pas chez le destinataire.
           <br><a href="https://sepolia.etherscan.io/tx/${tx.hash}" target="_blank"
                 style="color:#2e7d32;">Voir sur Sepolia Explorer →</a>`);
 
@@ -518,15 +732,131 @@
       } catch (err) {
         console.error("Erreur sendTransfer:", err);
         if (err.code === 4001) {
-          showTxStatus("error", "Transaction annulée par l'utilisateur dans MetaMask.");
+          showTxStatus("txStatus", "error", "Transaction annulée par l'utilisateur dans MetaMask.");
         } else if (err.reason) {
           // err.reason = le message du require() dans le contrat Solidity
-          showTxStatus("error", "Erreur du contrat : " + err.reason);
+          showTxStatus("txStatus", "error", "Erreur du contrat : " + err.reason);
         } else {
-          showTxStatus("error", "Erreur : " + err.message);
+          showTxStatus("txStatus", "error", "Erreur : " + err.message);
         }
       } finally {
         document.getElementById("btnSend").disabled = false;
+      }
+    });
+
+
+    // ────────────────────────────────────────────────────────────────
+    // RETIRER LES FONDS — withdraw() — réservé au owner du contrat
+    // Illustre concrètement le modifier onlyOwner vu au Chapitre 3 :
+    // n'importe qui peut CLIQUER, mais seul le owner verra la
+    // transaction aboutir. Les autres reçoivent un revert du contrat.
+    // ────────────────────────────────────────────────────────────────
+    document.getElementById("btnWithdraw").addEventListener("click", async () => {
+      try {
+        showTxStatus("withdrawStatus", "pending", "⏳ Envoi en cours... MetaMask va s'ouvrir pour confirmation.");
+        document.getElementById("btnWithdraw").disabled = true;
+
+        const tx = await contract.withdraw();
+
+        showTxStatus("withdrawStatus", "pending",
+          `✅ Transaction envoyée ! Hash : <a href="https://sepolia.etherscan.io/tx/${tx.hash}"
+            target="_blank" style="color:#2E75B6;">${tx.hash.slice(0,18)}...</a>
+          <br>Attente de confirmation par le réseau...`);
+
+        const receipt = await tx.wait();
+
+        showTxStatus("withdrawStatus", "success",
+          `🎉 Retrait confirmé au bloc <strong>${receipt.blockNumber}</strong> !
+          <br>Les fonds accumulés dans le contrat ont été envoyés au owner.
+          <br><a href="https://sepolia.etherscan.io/tx/${tx.hash}" target="_blank"
+                style="color:#2e7d32;">Voir sur Sepolia Explorer →</a>`);
+
+        await refreshStats();
+
+      } catch (err) {
+        console.error("Erreur withdraw:", err);
+        if (err.code === 4001) {
+          showTxStatus("withdrawStatus", "error", "Transaction annulée par l'utilisateur dans MetaMask.");
+        } else if (err.reason) {
+          // C'est ici que le modifier onlyOwner se manifeste pour un non-owner
+          showTxStatus("withdrawStatus", "error",
+            "Refusé par le contrat : " + err.reason + " — seul le owner peut retirer les fonds. " +
+            "C'est le modifier onlyOwner qui protège cette fonction.");
+        } else {
+          showTxStatus("withdrawStatus", "error", "Erreur : " + err.message);
+        }
+      } finally {
+        document.getElementById("btnWithdraw").disabled = false;
+      }
+    });
+
+
+    // ────────────────────────────────────────────────────────────────
+    // TRANSFERT DIRECT WALLET À WALLET — vrai P2P, sans passer par le contrat
+    // signer.sendTransaction() envoie une transaction Ethereum classique :
+    // les ETH quittent réellement l'expéditeur et arrivent chez le
+    // destinataire, contrairement à sendTransfer() qui les bloque dans
+    // le contrat.
+    // ────────────────────────────────────────────────────────────────
+    document.getElementById("btnP2PSend").addEventListener("click", async () => {
+      const toAddress = document.getElementById("inputP2PTo").value.trim();
+      const amountEth = document.getElementById("inputP2PAmount").value.trim();
+
+      if (!ethers.utils.isAddress(toAddress)) {
+        showTxStatus("p2pStatus", "error", "Adresse destinataire invalide. Vérifiez le format (0x...).");
+        return;
+      }
+      if (!amountEth || parseFloat(amountEth) <= 0) {
+        showTxStatus("p2pStatus", "error", "Montant invalide. Saisissez un montant supérieur à 0.");
+        return;
+      }
+
+      try {
+        const amountWei = ethers.utils.parseEther(amountEth);
+
+        // AMÉLIORATION 3 : même vérification de solde que pour sendTransfer
+        if (!(await hasSufficientBalance(amountWei, "p2pStatus"))) {
+          return;
+        }
+
+        showTxStatus("p2pStatus", "pending", "⏳ Envoi en cours... MetaMask va s'ouvrir pour confirmation.");
+        document.getElementById("btnP2PSend").disabled = true;
+
+        // Transaction Ethereum native — aucun contrat impliqué
+        const tx = await signer.sendTransaction({
+          to: toAddress,
+          value: amountWei
+        });
+
+        showTxStatus("p2pStatus", "pending",
+          `✅ Transaction envoyée ! Hash : <a href="https://sepolia.etherscan.io/tx/${tx.hash}"
+            target="_blank" style="color:#2E75B6;">${tx.hash.slice(0,18)}...</a>
+          <br>Attente de confirmation par le réseau...`);
+
+        const receipt = await tx.wait();
+
+        showTxStatus("p2pStatus", "success",
+          `🎉 Transfert confirmé au bloc <strong>${receipt.blockNumber}</strong> !
+          <br>Gas utilisé : ${receipt.gasUsed.toString()} unités
+          <br>Les fonds sont réellement arrivés dans le wallet du destinataire — demandez-lui de
+          rafraîchir son solde MetaMask.
+          <br><a href="https://sepolia.etherscan.io/tx/${tx.hash}" target="_blank"
+                style="color:#2e7d32;">Voir sur Sepolia Explorer →</a>`);
+
+        await refreshStats();
+
+        document.getElementById("inputP2PTo").value     = "";
+        document.getElementById("inputP2PAmount").value = "";
+
+      } catch (err) {
+        console.error("Erreur transfert P2P:", err);
+        if (err.code === 4001) {
+          showTxStatus("p2pStatus", "error", "Transaction annulée par l'utilisateur dans MetaMask.");
+        } else {
+          showTxStatus("p2pStatus", "error", "Erreur : " + err.message);
+        }
+      } finally {
+        document.getElementById("btnP2PSend").disabled = false;
       }
     });
 
@@ -609,8 +939,8 @@
     // ────────────────────────────────────────────────────────────────
     // UTILITAIRE : afficher le statut d'une transaction
     // ────────────────────────────────────────────────────────────────
-    function showTxStatus(type, message) {
-      const div = document.getElementById("txStatus");
+    function showTxStatus(divId, type, message) {
+      const div = document.getElementById(divId);
       const colors = {
         pending: { bg: "#fff8e1", border: "#fb8c00", color: "#6d4c41" },
         success: { bg: "#e8f5e9", border: "#2e7d32", color: "#1b5e20" },
