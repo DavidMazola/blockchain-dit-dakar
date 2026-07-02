@@ -15,6 +15,10 @@
     ║  → Formulaire sendTransfer (envoyer des ETH via la dApp)       ║
     ║  → Lecture de l'historique via les events TransferSent          ║
     ║  → Affichage du tableau de bord complet                        ║
+    ║                                                                  ║
+    ║  Comme en v1 : chaque étudiant colle l'adresse de SON PROPRE   ║
+    ║  contrat directement dans l'interface (section ②) — aucune     ║
+    ║  modification du fichier source n'est nécessaire.               ║
     ╚══════════════════════════════════════════════════════════════════╝
   -->
 
@@ -173,13 +177,34 @@
     </div>
   </div>
 
-  <!-- ── CONTENU PRINCIPAL (caché avant connexion) ────────────────── -->
+  <!-- ── SECTION CHOISIR SON PROPRE CONTRAT ──────────────────────── -->
+  <div class="card hidden" id="sectionPickContract">
+    <h2>② Charger VOTRE contrat</h2>
+    <p style="font-size:13px; color:#666; margin-bottom:14px;">
+      Collez ci-dessous l'adresse du contrat <strong>que VOUS avez déployé</strong>
+      (celle visible dans Remix IDE ou sur Sepolia Etherscan).
+    </p>
+
+    <div class="form-group">
+      <label>Adresse de votre contrat SimpleTransfer</label>
+      <input type="text" id="inputContractAddress" placeholder="0x..."
+             spellcheck="false" autocomplete="off"/>
+      <small>Adresse Ethereum valide (42 caractères, commence par 0x)</small>
+    </div>
+
+    <button id="btnLoadContract">📎 Charger mon contrat</button>
+    <div id="alertContract" class="alert alert-error hidden" style="margin-top:12px;">
+      Adresse invalide ou contrat introuvable. Vérifiez le format et le réseau (Sepolia).
+    </div>
+  </div>
+
+  <!-- ── CONTENU PRINCIPAL (caché avant chargement du contrat) ─────── -->
   <div id="mainContent" class="hidden">
 
     <!-- Statistiques du contrat -->
     <div class="grid">
       <div class="card">
-        <h2>② Statistiques du contrat</h2>
+        <h2>③ Statistiques du contrat</h2>
         <div class="stat-box">
           <div class="stat-val" id="statTransfers">—</div>
           <div class="stat-lbl">Transferts effectués</div>
@@ -205,7 +230,7 @@
 
       <!-- Formulaire d'envoi -->
       <div class="card">
-        <h2>③ Envoyer des ETH via le contrat</h2>
+        <h2>④ Envoyer des ETH via le contrat</h2>
         <div class="alert alert-info">
           Cette action crée une vraie transaction sur Sepolia.
           MetaMask vous demandera confirmation. Des frais de gas seront prélevés.
@@ -241,7 +266,7 @@
 
     <!-- Historique des transferts -->
     <div class="card">
-      <h2>④ Historique des transferts (events TransferSent)</h2>
+      <h2>⑤ Historique des transferts (events TransferSent)</h2>
       <p style="font-size:13px; color:#666; margin-bottom:14px;">
         Ces données proviennent des <strong>logs d'events</strong> émis par le contrat.
         La dApp interroge la blockchain pour lire tous les events <code>TransferSent</code>
@@ -259,7 +284,7 @@
 
     <!-- Liens Sepolia Explorer -->
     <div class="card">
-      <h2>⑤ Vérification on-chain</h2>
+      <h2>⑥ Vérification on-chain</h2>
       <p style="font-size:13px; color:#666; margin-bottom:10px;">
         Chaque action ci-dessus est enregistrée définitivement sur la blockchain Sepolia.
       </p>
@@ -284,9 +309,11 @@
 
     // ────────────────────────────────────────────────────────────────
     // CONFIGURATION DU CONTRAT
-    // Remplacer par l'adresse de VOTRE contrat SimpleTransfer v1 sur Sepolia
+    // Adresse par défaut (exemple) — chaque étudiant la remplace par la
+    // sienne directement dans l'interface (section ②), pas besoin de
+    // modifier le fichier.
     // ────────────────────────────────────────────────────────────────
-    const CONTRACT_ADDRESS = "0xdd60611951b607bd4c68e306992022d5e8f75bcf";
+    let CONTRACT_ADDRESS = "0xdd60611951b607bd4c68e306992022d5e8f75bcf";
 
     // ABI complète du contrat SimpleTransfer v1
     // Source : Remix IDE → artifacts → SimpleTransfer.json → champ "abi"
@@ -345,24 +372,59 @@
         document.getElementById("btnConnect").textContent = "✓ Connecté";
         document.getElementById("btnConnect").disabled = true;
 
-        // Connexion au contrat — avec 'signer' pour pouvoir écrire (sendTransfer)
-        // Différence vs v1 : on passe 'signer' au lieu de 'provider'
-        // → nécessaire pour les fonctions payable qui modifient l'état
-        contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
-
-        document.getElementById("statContract").textContent = CONTRACT_ADDRESS;
-        document.getElementById("explorerLink").href =
-          `https://sepolia.etherscan.io/address/${CONTRACT_ADDRESS}`;
-
-        // Charger les statistiques et afficher le contenu
-        await refreshStats();
-        document.getElementById("mainContent").classList.remove("hidden");
+        // Une fois le wallet connecté, on affiche la section pour
+        // charger le contrat de l'étudiant (section ②)
+        document.getElementById("sectionPickContract").classList.remove("hidden");
 
       } catch (err) {
         console.error(err);
         if (err.code === 4001) alert("Connexion refusée par l'utilisateur.");
         else alert("Erreur: " + err.message);
       }
+    });
+
+
+    // ────────────────────────────────────────────────────────────────
+    // CHARGER LE CONTRAT DE L'ÉTUDIANT
+    // Différence vs v1 : on passe 'signer' (pas 'provider') à
+    // ethers.Contract, car cette dApp doit pouvoir ÉCRIRE sur la
+    // blockchain (sendTransfer est une fonction payable).
+    // ────────────────────────────────────────────────────────────────
+    document.getElementById("btnLoadContract").addEventListener("click", async () => {
+      const inputAddr = document.getElementById("inputContractAddress").value.trim();
+      const alertBox  = document.getElementById("alertContract");
+      alertBox.classList.add("hidden");
+
+      if (!ethers.utils.isAddress(inputAddr)) {
+        alertBox.textContent = "Adresse de contrat invalide. Vérifiez le format (0x... 42 caractères).";
+        alertBox.classList.remove("hidden");
+        return;
+      }
+
+      CONTRACT_ADDRESS = inputAddr;
+      contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
+
+      try {
+        // Vérification rapide que le contrat répond bien (adresse existante et compatible ABI)
+        await contract.owner();
+      } catch (err) {
+        console.error("Contrat introuvable ou incompatible:", err);
+        alertBox.textContent = "Impossible de lire ce contrat. Vérifiez l'adresse et que vous êtes bien sur Sepolia.";
+        alertBox.classList.remove("hidden");
+        return;
+      }
+
+      document.getElementById("statContract").textContent = CONTRACT_ADDRESS;
+      document.getElementById("explorerLink").href =
+        `https://sepolia.etherscan.io/address/${CONTRACT_ADDRESS}`;
+
+      await refreshStats();
+      document.getElementById("mainContent").classList.remove("hidden");
+
+      // Réinitialiser l'historique affiché si on change de contrat
+      document.getElementById("historyContent").innerHTML =
+        '<p class="loading">Cliquez sur "Charger l\'historique" pour afficher les transferts.</p>';
+      document.getElementById("txStatus").classList.add("hidden");
     });
 
 
